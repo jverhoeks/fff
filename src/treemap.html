@@ -1,0 +1,355 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>fff treemap</title>
+<style>
+:root {
+  --bg: #f6f6f4; --panel: #ffffff; --fg: #1d1d1f; --muted: #6e6e73; --line: #d9d9d6; --hi: #0a66ff;
+  --bar: #c9732e;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #161618; --panel: #1f1f22; --fg: #ececee; --muted: #9a9aa0; --line: #333338; --hi: #5b9bff; --bar: #e0904a; }
+}
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; }
+body { background: var(--bg); color: var(--fg); font: 13px/1.35 -apple-system, BlinkMacSystemFont, "SF Pro Text", system-ui, sans-serif;
+  display: grid; grid-template-rows: auto minmax(160px, 34%) 1fr auto; }
+header { display: flex; gap: 12px; align-items: center; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+header h1 { font-size: 13px; margin: 0; font-weight: 600; }
+#crumbs { display: flex; flex-wrap: wrap; gap: 2px; align-items: center; min-width: 0; }
+#crumbs button { border: 0; background: none; color: var(--hi); cursor: pointer; padding: 2px 4px; border-radius: 4px; font: inherit; }
+#crumbs button:hover { background: var(--line); }
+#crumbs span { color: var(--muted); }
+#crumbs button:last-child { color: var(--fg); font-weight: 600; }
+.top { display: grid; grid-template-columns: 1fr minmax(220px, 300px); min-height: 0; border-bottom: 1px solid var(--line); }
+.list, .legend { overflow: auto; background: var(--panel); }
+.legend { border-left: 1px solid var(--line); }
+table { width: 100%; border-collapse: collapse; }
+th, td { padding: 3px 8px; text-align: left; white-space: nowrap; }
+th { position: sticky; top: 0; background: var(--panel); color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--line); }
+td.n { text-align: right; font-variant-numeric: tabular-nums; }
+tr.row { cursor: pointer; }
+tr.row:hover, tr.row.hot { background: color-mix(in srgb, var(--hi) 14%, transparent); }
+.bar { width: 90px; } .bar i { display: block; height: 8px; background: var(--bar); border-radius: 2px; }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 2px; vertical-align: -1px; margin-right: 6px; }
+td.name { overflow: hidden; text-overflow: ellipsis; max-width: 46vw; }
+#wrap { position: relative; min-height: 0; }
+canvas { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
+#tip { position: fixed; pointer-events: none; background: var(--panel); color: var(--fg); border: 1px solid var(--line); border-radius: 6px;
+  padding: 6px 8px; box-shadow: 0 4px 16px rgba(0,0,0,.18); max-width: 520px; display: none; font-size: 12px; word-break: break-all; }
+#menu { position: fixed; display: none; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 4px;
+  box-shadow: 0 8px 24px rgba(0,0,0,.22); min-width: 200px; z-index: 10; }
+#menu .t { padding: 4px 10px 6px; color: var(--muted); font-size: 12px; max-width: 360px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; border-bottom: 1px solid var(--line); margin-bottom: 4px; }
+#menu button { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--fg); font: inherit; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+#menu button:hover { background: var(--hi); color: #fff; }
+#menu button.danger { color: #d64545; } #menu button.danger:hover { background: #d64545; color: #fff; }
+#menu hr { border: 0; border-top: 1px solid var(--line); margin: 4px 0; }
+#toast { position: fixed; left: 50%; bottom: 36px; transform: translateX(-50%); background: var(--fg); color: var(--bg); padding: 8px 14px;
+  border-radius: 8px; display: none; z-index: 11; max-width: 80vw; }
+td.act { width: 1%; } td.act button { border: 0; background: none; cursor: pointer; opacity: 0; padding: 0 3px; font-size: 13px; }
+tr.row:hover td.act button { opacity: .75; } td.act button:hover { opacity: 1 !important; }
+footer { padding: 4px 12px; color: var(--muted); border-top: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+@media (max-width: 640px) { .top { grid-template-columns: 1fr; } .legend { display: none; } td.name { max-width: 60vw; } }
+</style>
+</head>
+<body>
+<header><h1>fff</h1><div id="crumbs"></div></header>
+<div class="top">
+  <div class="list"><table><thead><tr><th>Name</th><th class="n">Size</th><th></th><th class="n">%</th><th>Type</th><th></th></tr></thead><tbody id="rows"></tbody></table></div>
+  <div class="legend"><table><thead><tr><th>Kind</th><th class="n">Size</th><th class="n">%</th></tr></thead><tbody id="kinds"></tbody></table></div>
+</div>
+<div id="wrap"><canvas id="cv"></canvas></div>
+<footer id="foot"></footer>
+<div id="tip"></div>
+<div id="menu"></div>
+<div id="toast"></div>
+<script>
+const DATA = /*DATA*/null;
+const API = /*API*/null; // token when served by `fff treemap --serve`
+
+const COLORS = {
+  document: "#3b7dd8", slides: "#e8772e", sheet: "#2f9e5b", image: "#c94fc2", video: "#d64545", audio: "#8a5cd6",
+  archive: "#d9b62b", diskimage: "#2bb5c9", code: "#23a39a", data: "#8d9a3a", font: "#e07fa8", binary: "#6a7a90",
+  ebook: "#a0703c", mail: "#5a8fd0", symlink: "#999999", other: "#8f8f8f",
+  o: "#7d6a58",   // opaque dir (node_modules, target, .cache…): sized, contents not indexed
+  rest: "#a9a9a4", // files below the threshold
+  d: "#a9a9a4"
+};
+const LABEL = { o: "cache / build dir", rest: "small files", d: "folder", g: "git repo" };
+
+function fmt(n) {
+  const u = ["B", "K", "M", "G", "T"]; let i = 0, v = n;
+  while (v >= 1024 && i < u.length - 1) { v /= 1024; i++; }
+  return i === 0 ? n + "B" : (v < 10 ? v.toFixed(1) : v.toFixed(0)) + u[i];
+}
+
+// ---- build tree ----
+const N = DATA.nodes.map((r, i) => ({ i, parent: r[0], name: r[1], v: r[2], t: r[3], kids: [] }));
+for (const n of N) if (n.parent >= 0) N[n.parent].kids.push(n);
+function isDir(n) { return n.t === "d" || n.t === "g" || n.t === "o"; }
+for (const n of N) {
+  if (!isDir(n) || n.t === "o") continue;
+  const s = n.kids.reduce((a, k) => a + k.v, 0);
+  if (n.v - s > 0) n.kids.push({ i: -1, parent: n.i, name: "(smaller files)", v: n.v - s, t: "rest", kids: [] });
+  n.kids.sort((a, b) => b.v - a.v);
+}
+function pathOf(n) {
+  // walk up until an absolute name (a scan root or --under dir)
+  const parts = []; let c = n;
+  while (c) { parts.push(c.name); if (c.name.startsWith("/")) break; c = c.parent >= 0 ? N[c.parent] : null; }
+  parts.reverse();
+  return parts.join("/").replace(/\/+/g, "/");
+}
+function actionable(n) { return n && n.t !== "rest" && n.parent >= 0 && pathOf(n).startsWith("/"); }
+function trashable(n) { return actionable(n) && !n.name.startsWith("/"); } // never a scan root
+function colorOf(n) { return n.t === "g" ? COLORS.d : (COLORS[n.t] || COLORS.other); }
+
+// ---- squarified layout (Bruls, Huizing, van Wijk 2000) ----
+function squarify(items, x, y, w, h, out) {
+  const total = items.reduce((a, b) => a + b.v, 0);
+  if (total <= 0 || w < 1 || h < 1) return;
+  const scale = (w * h) / total;
+  let i = 0;
+  while (i < items.length) {
+    const side = Math.min(w, h);
+    let row = [], rowArea = 0, best = Infinity;
+    while (i < items.length) {
+      const a = items[i].v * scale;
+      const area = rowArea + a, mx = Math.max(row.length ? row[0].a : a, a), mn = a;
+      const worst = Math.max((side * side * mx) / (area * area), (area * area) / (side * side * mn));
+      if (row.length && worst > best) break;
+      row.push({ n: items[i], a }); rowArea = area; best = worst; i++;
+    }
+    const thick = rowArea / side;
+    let off = 0;
+    for (const r of row) {
+      const len = r.a / thick;
+      if (w >= h) out.push([r.n, x, y + off, thick, len]); else out.push([r.n, x + off, y, len, thick]);
+      off += len;
+    }
+    if (w >= h) { x += thick; w -= thick; } else { y += thick; h -= thick; }
+  }
+}
+
+// ---- render ----
+const cv = document.getElementById("cv"), ctx = cv.getContext("2d");
+let current = N[0], rects = [], hot = null;
+const HEADER = 15;
+
+function cushion(x, y, w, h, color) {
+  // WinDirStat-like cushion: radial highlight on the base colour
+  const g = ctx.createRadialGradient(x + w * 0.35, y + h * 0.3, 0, x + w / 2, y + h / 2, Math.max(w, h) * 0.75);
+  g.addColorStop(0, shade(color, 0.45)); g.addColorStop(0.55, color); g.addColorStop(1, shade(color, -0.45));
+  ctx.fillStyle = g; ctx.fillRect(x, y, w, h);
+}
+function shade(hex, f) {
+  const c = parseInt(hex.slice(1), 16); let r = c >> 16, g = (c >> 8) & 255, b = c & 255;
+  const t = f < 0 ? 0 : 255, p = Math.abs(f);
+  r = Math.round((t - r) * p + r); g = Math.round((t - g) * p + g); b = Math.round((t - b) * p + b);
+  return `rgb(${r},${g},${b})`;
+}
+
+function drawNode(n, x, y, w, h, depth) {
+  if (w < 1 || h < 1) return;
+  const dir = isDir(n) && n.kids.length > 0;
+  if (!dir) {
+    cushion(x, y, w, h, colorOf(n));
+    rects.push([n, x, y, w, h]);
+    if (w > 70 && h > 14) label(n.name, x + 3, y + 11, w - 6, "#fff", true);
+    return;
+  }
+  rects.push([n, x, y, w, h]);
+  ctx.fillStyle = depth % 2 ? "#3a3a3e" : "#2c2c30";
+  ctx.fillRect(x, y, w, h);
+  let hy = 0;
+  if (h > 40 && w > 50) {
+    hy = HEADER;
+    label(`${n.name}  ${fmt(n.v)}`, x + 3, y + 11, w - 6, "#e6e6e6", false);
+  }
+  const pad = w > 8 && h > 8 ? 1 : 0;
+  const out = [];
+  squarify(n.kids, x + pad, y + hy + pad, w - 2 * pad, h - hy - 2 * pad, out);
+  for (const [k, kx, ky, kw, kh] of out) drawNode(k, kx, ky, kw, kh, depth + 1);
+}
+function label(text, x, y, maxw, color, shadow) {
+  ctx.font = "11px -apple-system, system-ui, sans-serif";
+  let t = text;
+  if (ctx.measureText(t).width > maxw) {
+    while (t.length > 1 && ctx.measureText(t + "…").width > maxw) t = t.slice(0, -1);
+    t += "…";
+  }
+  if (shadow) { ctx.fillStyle = "rgba(0,0,0,.55)"; ctx.fillText(t, x + 1, y + 1); }
+  ctx.fillStyle = color; ctx.fillText(t, x, y);
+}
+
+function render() {
+  const r = cv.getBoundingClientRect(), dpr = window.devicePixelRatio || 1;
+  cv.width = Math.max(1, r.width * dpr); cv.height = Math.max(1, r.height * dpr);
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  rects = [];
+  drawNode(current, 0, 0, r.width, r.height, 0);
+  if (hot) {
+    const h = rects.find(q => q[0] === hot);
+    if (h) { ctx.strokeStyle = "#fff"; ctx.lineWidth = 2; ctx.strokeRect(h[1] + 1, h[2] + 1, h[3] - 2, h[4] - 2); }
+  }
+}
+
+function zoom(n) {
+  if (!isDir(n) || !n.kids.length) n = n.parent >= 0 ? N[n.parent] : n;
+  current = n; hot = null;
+  crumbs(); list(); kinds(); render();
+}
+function crumbs() {
+  const el = document.getElementById("crumbs"); el.innerHTML = "";
+  const chain = []; let c = current;
+  while (c) { chain.unshift(c); c = c.parent >= 0 ? N[c.parent] : null; }
+  chain.forEach((n, j) => {
+    if (j) { const s = document.createElement("span"); s.textContent = "›"; el.appendChild(s); }
+    const b = document.createElement("button"); b.textContent = n.name; b.onclick = () => zoom(n); el.appendChild(b);
+  });
+}
+function typeName(n) { return LABEL[n.t] || n.t; }
+function list() {
+  const tb = document.getElementById("rows"); tb.innerHTML = "";
+  const max = current.kids.length ? current.kids[0].v : 1;
+  for (const k of current.kids.slice(0, 400)) {
+    const tr = document.createElement("tr"); tr.className = "row";
+    tr.innerHTML = `<td class="name"><span class="sw"></span></td><td class="n"></td><td class="bar"><i></i></td><td class="n"></td><td></td><td class="act"></td>`;
+    tr.querySelector(".sw").style.background = colorOf(k);
+    tr.cells[0].append((isDir(k) && k.t !== "o" ? "📁 " : "") + k.name);
+    tr.cells[1].textContent = fmt(k.v);
+    tr.querySelector(".bar i").style.width = (100 * k.v / max).toFixed(1) + "%";
+    tr.cells[3].textContent = (100 * k.v / current.v).toFixed(1) + "%";
+    tr.cells[4].textContent = typeName(k);
+    tr.title = pathOf(k);
+    tr.onclick = () => { if (isDir(k) && k.kids.length) zoom(k); };
+    tr.oncontextmenu = e => { e.preventDefault(); menu(k, e.clientX, e.clientY); };
+    if (API && actionable(k)) {
+      const act = tr.cells[5];
+      for (const [icon, title, fn] of [["🔍", "Reveal in Finder", () => api("reveal", k)], ...(trashable(k) ? [["🗑", "Move to Trash…", () => trash(k)]] : [])]) {
+        const b = document.createElement("button"); b.textContent = icon; b.title = title;
+        b.onclick = e => { e.stopPropagation(); fn(); }; act.appendChild(b);
+      }
+    }
+    tr.onmouseenter = () => { hot = k; render(); };
+    tb.appendChild(tr);
+  }
+}
+function kinds() {
+  const sums = {};
+  (function walk(n) {
+    if (isDir(n) && n.t !== "o" && n.kids.length) { n.kids.forEach(walk); return; }
+    const t = isDir(n) ? (n.t === "o" ? "o" : "rest") : n.t;
+    sums[t] = (sums[t] || 0) + n.v;
+  })(current);
+  const tb = document.getElementById("kinds"); tb.innerHTML = "";
+  Object.entries(sums).sort((a, b) => b[1] - a[1]).forEach(([t, v]) => {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td><span class="sw"></span></td><td class="n"></td><td class="n"></td>`;
+    tr.querySelector(".sw").style.background = COLORS[t] || COLORS.other;
+    tr.cells[0].append(LABEL[t] || t);
+    tr.cells[1].textContent = fmt(v);
+    tr.cells[2].textContent = (100 * v / current.v).toFixed(1) + "%";
+    tb.appendChild(tr);
+  });
+}
+
+// ---- interaction ----
+const tip = document.getElementById("tip");
+function hit(e) {
+  const r = cv.getBoundingClientRect(), x = e.clientX - r.left, y = e.clientY - r.top;
+  for (let j = rects.length - 1; j >= 0; j--) {
+    const [n, rx, ry, rw, rh] = rects[j];
+    if (x >= rx && x < rx + rw && y >= ry && y < ry + rh) return n;
+  }
+  return null;
+}
+cv.addEventListener("mousemove", e => {
+  const n = hit(e);
+  if (!n) { tip.style.display = "none"; return; }
+  tip.style.display = "block";
+  tip.innerHTML = "";
+  const b = document.createElement("b"); b.textContent = fmt(n.v) + "  ·  " + typeName(n);
+  const p = document.createElement("div"); p.textContent = n.t === "rest" ? pathOf(N[n.parent]) + " — files below " + fmt(DATA.threshold) : pathOf(n);
+  tip.append(b, p);
+  const tx = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8), ty = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8);
+  tip.style.left = tx + "px"; tip.style.top = ty + "px";
+});
+cv.addEventListener("mouseleave", () => tip.style.display = "none");
+cv.addEventListener("click", e => {
+  // zoom one level towards the clicked item
+  let n = hit(e); if (!n) return;
+  while (n.parent >= 0 && N[n.parent] !== current) n = N[n.parent];
+  if (n.i >= 0) zoom(n);
+});
+cv.addEventListener("contextmenu", e => { e.preventDefault(); tip.style.display = "none"; menu(hit(e), e.clientX, e.clientY); });
+
+// ---- actions (Reveal / Open / Trash need `fff treemap --serve`) ----
+const menuEl = document.getElementById("menu"), toastEl = document.getElementById("toast");
+let toastT;
+function toast(msg, sticky) { toastEl.textContent = msg; toastEl.style.display = "block"; clearTimeout(toastT); if (!sticky) toastT = setTimeout(() => toastEl.style.display = "none", 5000); }
+function menu(n, x, y) {
+  menuEl.innerHTML = "";
+  const add = (label, fn, cls) => { const b = document.createElement("button"); b.textContent = label; if (cls) b.className = cls;
+    b.onclick = () => { menuEl.style.display = "none"; fn(); }; menuEl.appendChild(b); };
+  if (n && actionable(n)) {
+    const t = document.createElement("div"); t.className = "t"; t.textContent = pathOf(n) + "  ·  " + fmt(n.v); menuEl.appendChild(t);
+    if (isDir(n) && n.kids.length && n !== current) add("Zoom in", () => zoom(n));
+    if (API) { add("Reveal in Finder", () => api("reveal", n)); add("Open", () => api("open", n)); }
+    add("Copy path", () => navigator.clipboard.writeText(pathOf(n)).then(() => toast("copied " + pathOf(n))));
+    if (API && trashable(n)) { menuEl.appendChild(document.createElement("hr")); add("Move to Trash…", () => trash(n), "danger"); }
+    else { const t2 = document.createElement("div"); t2.className = "t"; t2.style.borderTop = "1px solid var(--line)"; t2.style.borderBottom = "0";
+      t2.textContent = "Reveal / Trash: run fff treemap --serve"; menuEl.appendChild(t2); }
+  }
+  if (current.parent >= 0) add("Zoom out", () => zoom(N[current.parent]));
+  if (!menuEl.children.length) return;
+  menuEl.style.display = "block";
+  menuEl.style.left = Math.min(x, innerWidth - menuEl.offsetWidth - 8) + "px";
+  menuEl.style.top = Math.min(y, innerHeight - menuEl.offsetHeight - 8) + "px";
+}
+addEventListener("click", e => { if (!menuEl.contains(e.target)) menuEl.style.display = "none"; }, true);
+async function api(what, n, force) {
+  try {
+    const r = await fetch("/api/" + what, { method: "POST", headers: { "X-Token": API, "Content-Type": "application/json" }, body: JSON.stringify({ path: pathOf(n), force: !!force }) });
+    const j = await r.json();
+    if (r.status === 409 && j.warnings) return j; // Trash guard: local git work found, ask again
+    if (!r.ok) throw new Error(j.error || r.statusText);
+    return j;
+  } catch (err) { toast("⚠ " + (err.message === "Failed to fetch" ? "server not running — restart fff treemap --serve" : err.message)); return null; }
+}
+const busy = new Set();
+async function trash(n) {
+  const p = pathOf(n);
+  if (busy.has(n)) return;
+  if (!confirm(`Move to Trash?\n\n${p}\n${fmt(n.v)}${isDir(n) ? " (whole folder)" : ""}\n\nYou can put it back from the Trash.`)) return;
+  toast("Moving to Trash… " + p, true);
+  busy.add(n);
+  let j = await api("trash", n);
+  if (j && j.warnings) {
+    toastEl.style.display = "none";
+    const w = j.warnings.map(x => "• " + x).join("\n\n");
+    if (!confirm(`This holds git work that exists nowhere else:\n\n${w}\n\nUntracked files are not checked. Put Back restores it; emptying the Trash makes it permanent.\n\nMove to Trash anyway?`)) { busy.delete(n); toast("not moved"); return; }
+    toast("Moving to Trash… " + p, true);
+    j = await api("trash", n, true);
+  }
+  busy.delete(n);
+  if (!j || j.warnings) return;
+  // drop it from the tree and shrink every ancestor
+  const par = N[n.parent];
+  par.kids = par.kids.filter(k => k !== n);
+  for (let c = par; c; c = c.parent >= 0 ? N[c.parent] : null) c.v -= n.v;
+  if (current === n || isAncestor(n, current)) current = par;
+  toast(`moved to Trash: ${p} (${fmt(n.v)}); space is freed when the Trash is emptied`);
+  hot = null; crumbs(); list(); kinds(); render();
+}
+function isAncestor(a, b) { for (let c = b; c; c = c.parent >= 0 ? N[c.parent] : null) if (c === a) return true; return false; }
+addEventListener("keydown", e => { if ((e.key === "Backspace" || e.key === "Escape") && current.parent >= 0) zoom(N[current.parent]); });
+new ResizeObserver(render).observe(document.getElementById("wrap"));
+document.getElementById("foot").textContent =
+  `${fmt(DATA.total)} · ${N.length} items ≥ ${fmt(DATA.threshold)} shown (smaller grouped) · click to zoom in, Esc to go up, right-click for actions${API ? "" : " (Reveal/Trash: fff treemap --serve)"} · rerun with --under DIR for more detail`;
+zoom(N[0]);
+</script>
+</body>
+</html>
