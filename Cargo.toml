@@ -5,6 +5,7 @@ edition = "2024"
 description = "Fast local file index for macOS: find, sizes, duplicates, packages and git repos, with a CLI and an MCP server"
 repository = "https://github.com/jverhoeks/fff"
 readme = "README.md"
+license = "Apache-2.0"
 
 [dependencies]
 anyhow = "1.0.105"

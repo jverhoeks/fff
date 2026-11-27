@@ -30,6 +30,7 @@ macOS only (it uses APFS clone detection, `st_flags` for iCloud placeholders and
 - [How it works](#how-it-works)
 - [Safety and privacy](#safety-and-privacy)
 - [Limits](#limits)
+- [License](#license)
 
 More detail:
 - [docs/packages.md](docs/packages.md): package sources and version ranges.
@@ -401,3 +402,7 @@ The schema is in [docs/sql.md](docs/sql.md). Design notes and measurements are i
   found by a query typed precomposed (NFC).
 - **No incremental updates** (FSEvents). Rerun `scan`.
 - **macOS only.**
+
+## License
+
+[Apache License 2.0](LICENSE).
