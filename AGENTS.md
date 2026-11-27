@@ -11,6 +11,8 @@ Design rationale and measurements are in `DESIGN.md`; usage is in `README.md`.
 
 ## Build / test / run
 
+`make help` wraps the same commands (`make build test lint mcp-test`).
+
 ```sh
 cargo build --release            # binary: target/release/fff
 cargo test --release

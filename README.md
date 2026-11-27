@@ -48,12 +48,14 @@ You need Rust 1.85 or newer (edition 2024).
 ```sh
 git clone https://github.com/jverhoeks/fff.git
 cd fff
-cargo build --release
-cp target/release/fff ~/.local/bin/      # or anywhere on your PATH
+make install       # cargo install into ~/.cargo/bin (PREFIX=… for elsewhere)
 
-fff scan     # first scan: ~1.5–5 min for a home folder
+fff scan           # first scan: ~1.5–5 min for a home folder
 fff stats
 ```
+
+`make help` lists the other targets: `build`, `test`, `lint`, `run ARGS='find invoice'`, `scan`, `treemap`, `serve`,
+`mcp-test`, `skill` (installs the agent skill) and `uninstall`.
 
 `scan` indexes `$HOME` and iCloud Drive. It skips the rest of `~/Library`, which is mostly app caches and triggers macOS privacy prompts.
 It then reads package versions from Homebrew and global npm/pip installs, without indexing those folders. Rerun `scan`
